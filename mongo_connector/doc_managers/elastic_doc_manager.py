@@ -224,12 +224,13 @@ class DocManager(DocManagerBase):
         """Insert a document into Elasticsearch."""
         index, doc_type = self._index_and_mapping(namespace)
         # No need to duplicate '_id' in source document
-        doc_id = u(doc.get("_id"))
+        doc_id = u(doc.pop("_id"))
         try:
             # Index the source document, using lowercase namespace as index name.
             self.elastic.index(index=index, doc_type=doc_type,
                                body=self._formatter.format_document(doc), id=doc_id,
                                refresh=(self.auto_commit_interval == 0))
+            doc['_id'] = doc_id
         except es_exceptions.RequestError, e:
             LOG.info("Failed to upsert document: %r", e.info)
             error = self.parseError(e.info['error'])
@@ -255,7 +256,7 @@ class DocManager(DocManagerBase):
         def docs_to_upsert():
             doc = None
             for doc in docs:
-                doc_id = u(doc.get("_id"))
+                doc_id = u(doc.pop("_id"))
                 document_action = {
                     "_index": index_name,
                     "_type": doc_type,
@@ -301,7 +302,7 @@ class DocManager(DocManagerBase):
     @wrap_exceptions
     def insert_file(self, f, namespace, timestamp):
         doc = f.get_metadata()
-        doc_id = str(doc.get('_id'))
+        doc_id = str(doc.pop('_id'))
         index, doc_type = self._index_and_mapping(namespace)
 
         # make sure that elasticsearch treats it like a file
