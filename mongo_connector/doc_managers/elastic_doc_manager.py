@@ -242,6 +242,10 @@ class DocManager(DocManagerBase):
         parsed = search("MapperParsingException[{}[{field_name}]{}", errorDesc)
         if not parsed:
             parsed = search("MapperParsingException[{}[{}]{}[{field_name}]{}", errorDesc)
+        if not parsed:
+            parsed = search("{}MapperParsingException[{}[{field_name}]{}", errorDesc)
+        if not parsed:
+            parsed = search("{}MapperParsingException[{}[{}]{}[{field_name}]{}", errorDesc)
         LOG.info("Parsed ES Error: %s from description %s", parsed, errorDesc)
         if parsed and parsed.named:
             return parsed.named
