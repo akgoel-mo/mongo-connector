@@ -26,7 +26,6 @@ import time
 import threading
 
 from mongo_connector import errors, util
-from mongo_connector.barrier import Barrier
 from mongo_connector.constants import DEFAULT_BATCH_SIZE
 from mongo_connector.gridfs_file import GridFSFile
 from mongo_connector.util import log_fatal_exceptions, retry_until_ok
@@ -41,7 +40,7 @@ class OplogThread(threading.Thread):
 
     Calls the appropriate method on DocManagers for each relevant oplog entry.
     """
-    def __init__(self, primary_client, doc_managers,
+    def __init__(self, shard_name, primary_client, doc_managers,
                  oplog_progress_dict, barrier=None, mongos_client=None, **kwargs):
         super(OplogThread, self).__init__()
 
@@ -90,7 +89,9 @@ class OplogThread(threading.Thread):
         # Set of fields to export
         self.fields = kwargs.get('fields', {})
 
-        LOG.info('OplogThread: Initializing oplog thread')
+        LOG.info('OplogThread: Initializing oplog thread for shard name: %s' % shard_name)
+
+        self.shard_name = shard_name
 
         self.oplog = self.primary_client.local.oplog.rs
 
@@ -179,7 +180,7 @@ class OplogThread(threading.Thread):
     def run(self):
         """Start the oplog worker.
         """
-        LOG.debug("OplogThread: Run thread started")
+        LOG.info("OplogThread: Run thread started for shard_name: %s" % self.shard_name)
         while self.running is True:
             LOG.debug("OplogThread: Getting cursor")
             cursor = None
@@ -679,21 +680,16 @@ class OplogThread(threading.Thread):
     def get_last_oplog_timestamp(self):
         """Return the timestamp of the latest entry in the oplog.
         """
-        if not self.oplog_ns_set:
-            curr = self.oplog.find().sort(
-                '$natural', pymongo.DESCENDING
-            ).limit(1)
-        else:
-            curr = self.oplog.find(
-                {'ns': {'$in': self.oplog_ns_set}}
-            ).sort('$natural', pymongo.DESCENDING).limit(1)
+        curr = self.oplog.find().sort('$natural', pymongo.DESCENDING).limit(1)
 
-        if curr.count(with_limit_and_skip=True) == 0:
+        try:
+            oplog_ts = curr[0]['ts']
+        except:
             return None
 
         LOG.debug("OplogThread: Last oplog entry has timestamp %d."
-                  % curr[0]['ts'].time)
-        return curr[0]['ts']
+                  % oplog_ts.time)
+        return oplog_ts
 
     def init_cursor(self):
         """Position the cursor appropriately.
@@ -730,9 +726,9 @@ class OplogThread(threading.Thread):
                 # Collection dump disabled:
                 # return cursor to beginning of oplog.
                 LOG.info("INITIAL IMPORT: Initial import skipped, creating oplog cursor")
-                cursor = self.get_oplog_cursor()
                 self.checkpoint = self.get_last_oplog_timestamp()
                 self.update_checkpoint()
+                cursor = self.get_oplog_cursor()
                 return cursor
         else:
             LOG.info("Last checkpoint found from timestamp file, resuming oplog tailing from timestamp: %r" % timestamp)
