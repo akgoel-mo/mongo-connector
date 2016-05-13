@@ -22,10 +22,11 @@ import logging
 
 from threading import Timer
 
-from parse import search
+from parse import parse
 
-from elasticsearch import Elasticsearch, exceptions as es_exceptions
-from elasticsearch.helpers import streaming_bulk
+from elasticsearch import Elasticsearch
+from elasticsearch import ConnectionError, TransportError, NotFoundError, RequestError
+from elasticsearch.helpers import streaming_bulk, BulkIndexError
 
 from mongo_connector import errors
 from threading import Lock
@@ -38,10 +39,10 @@ from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
 
 wrap_exceptions = exception_wrapper({
-    es_exceptions.ConnectionError: errors.ConnectionFailed,
-    es_exceptions.TransportError: errors.OperationFailed,
-    es_exceptions.NotFoundError: errors.OperationFailed,
-    es_exceptions.RequestError: errors.OperationFailed})
+    ConnectionError: errors.ConnectionFailed,
+    TransportError: errors.OperationFailed,
+    NotFoundError: errors.OperationFailed,
+    RequestError: errors.OperationFailed})
 
 LOG = logging.getLogger(__name__)
 
@@ -124,14 +125,14 @@ class DocManager(DocManagerBase):
             for index_name in alias_dict:
                 LOG.info("Removing alias %s from index %s" % (alias_name, index_name))
                 self.elastic.indices.delete_alias(index=index_name, name=alias_name)
-        except es_exceptions.NotFoundError:
+        except NotFoundError:
             LOG.info("No alias with name %s found" % alias_name)
         try:
             if self.elastic.indices.exists(index=alias_name):
                 LOG.info("Found index with name: %s, deleting old index to set new alias" % alias_name)
                 self.elastic.indices.delete(index=alias_name)
                 LOG.warning("Deleted index with name: %s" % alias_name)
-        except es_exceptions.RequestError, e:
+        except RequestError, e:
             LOG.error("Failed to delete index with name: %s due to error: %r" % (alias_name, e))
 
     def index_create(self, namespace):
@@ -143,7 +144,7 @@ class DocManager(DocManagerBase):
                 try:
                     self.elastic.indices.create(index=index, body=request)
                     self.index_created = True
-                except es_exceptions.RequestError, e:
+                except RequestError, e:
                     LOG.warning('Failed to create index due to error: %r' % e)
             else:
                 LOG.info("Index already created, skipping index creation")
@@ -208,7 +209,7 @@ class DocManager(DocManagerBase):
         if not doc:
             try:
                 document = self.elastic.get(index=index, doc_type=doc_type, id=u(document_id))
-            except es_exceptions.NotFoundError, e:
+            except NotFoundError, e:
                 return (document_id, e)
         else:
             document['_source'] = doc
@@ -233,7 +234,7 @@ class DocManager(DocManagerBase):
             self.elastic.index(index=index, doc_type=doc_type,
                                body=self._formatter.format_document(doc), id=doc_id,
                                refresh=(self.auto_commit_interval == 0))
-        except es_exceptions.RequestError, e:
+        except RequestError, e:
             LOG.info("Failed to upsert document: %r", e.info)
             error = self.parseError(e.info['error'])
             if(error):
@@ -255,18 +256,37 @@ class DocManager(DocManagerBase):
             except:
                 LOG.warning("Incorrect value passed in a geo point field: %r, value: %r" % (key, value))
 
-    def parseError(self, errorDesc):
-        parsed = search("MapperParsingException[{}[{field_name}]{}", errorDesc)
-        if not parsed:
-            parsed = search("MapperParsingException[{}[{}]{}[{field_name}]{}", errorDesc)
-        if not parsed:
-            parsed = search("{}MapperParsingException[{}[{field_name}]{}", errorDesc)
-        if not parsed:
-            parsed = search("{}MapperParsingException[{}[{}]{}[{field_name}]{}", errorDesc)
-        LOG.info("Parsed ES Error: %s from description %s", parsed, errorDesc)
+    def _errorToDict(self, error=None):
+        error_dict = {
+            'status': 500
+        }
+        if isinstance(error, ConnectionError):
+            error_dict['error'] = error.info
+            error_dict['type'] = 'read_timeout'
+        elif isinstance(error, TransportError):
+            if isinstance(error.error, dict):
+                error_dict.update(error.error)
+            else:
+                error_dict['error'] = error.info
+                error_dict['type'] = error.error
+            error_dict['status'] = error.status_code
+        elif isinstance(error, dict):
+            error_dict.update(error)
+        return error_dict
+
+    def parseError(self, error):
+        error_dict = self._errorToDict(error)
+        error_info = error_dict.get('error', {}).get('error', {})
+        reason = error_info.get('reason', '')
+        parsed = parse("failed to parse [{field_name}]{}", reason)
         if parsed and parsed.named:
             return parsed.named
-        LOG.warning("Couldn't parse ES error: %s", errorDesc)
+        else:
+            reason = error_info.get('caused_by', {}).get('reason', '')
+            parsed = parse("{} for {field_name}", reason)
+            if parsed and parsed.named:
+                return parsed.named
+        LOG.warning("Couldn't parse ES error: %s", error_info)
         return None
 
     @wrap_exceptions
@@ -299,21 +319,20 @@ class DocManager(DocManagerBase):
                                        **kw)
             docs_inserted = 0
             for ok, resp in responses:
-                if not ok and resp:
-                    try:
-                        index = resp['index']
-                        error_field = self.parseError(index['error'])
-                        error = (index['_id'], error_field['field_name'])
-                        LOG.info("Found failed document from bulk upsert: %s", error)
-                        yield error
-                    except Exception:
-                        LOG.error("Could not parse response to reinsert: %r" % resp)
-                else:
-                    docs_inserted += 1
-                    if(docs_inserted % 10000 == 0):
-                        LOG.info("Bulk Upsert: Inserted %d docs" % docs_inserted)
+                docs_inserted += 1
+                if(docs_inserted % 10000 == 0):
+                    LOG.info("Bulk Upsert: Inserted %d docs" % docs_inserted)
             LOG.info("Bulk Upsert: Finished inserting %d docs" % docs_inserted)
             self.commit(index_name)
+        except BulkIndexError, e:
+            LOG.info("Bulk Upsert: Reinserting failed docs")
+            for error in e.errors:
+                err = error['index']
+                try:
+                    error_field = self.parseError(err['error'])
+                    yield (err['_id'], error_field['field_name'])
+                except Exception, e:
+                    LOG.error("Could not parse error field: %r due to error: %r" % (err['error'], e))
         except errors.EmptyDocsError:
             pass
         except Exception, e:
