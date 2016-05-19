@@ -23,6 +23,7 @@ import logging
 from threading import Timer
 
 from parse import parse
+from dateutil import parser
 
 from elasticsearch import Elasticsearch
 from elasticsearch import ConnectionError, TransportError, NotFoundError, RequestError
@@ -35,7 +36,7 @@ from mongo_connector.constants import (DEFAULT_COMMIT_INTERVAL,
                                        DEFAULT_MAX_BULK)
 from mongo_connector.util import exception_wrapper, retry_until_ok
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
-from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
+from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter, DataType
 
 wrap_exceptions = exception_wrapper({
     ConnectionError: errors.ConnectionFailed,
@@ -207,6 +208,7 @@ class DocManager(DocManagerBase):
                 return (document_id, e)
         else:
             document['_source'] = doc
+        document['_source'] = self.parseESDoc(document['_source'])
         updated = self.apply_update(document['_source'], update_spec)
         # _id is immutable in MongoDB, so won't have changed in update
         updated['_id'] = document['_id']
@@ -235,6 +237,13 @@ class DocManager(DocManagerBase):
                 return (doc_id, error['field_name'])
         doc['_id'] = doc_id
         return None
+
+    def parseESDoc(self, doc):
+        date_prefix = DataType.DATETIME.prefix()
+        for key, val in doc.items():
+            if key.startswith(date_prefix):
+                doc[key] = parser.parse(val)
+        return doc
 
     def mapGeoFields(self, doc):
         for key in doc.keys():
