@@ -213,8 +213,7 @@ class DefaultDocumentFormatter(DocumentFormatter):
                         new_key = DataType.forValue(new_v).prefix() + new_k
                     else:
                         new_key = new_k
-                        new_val = new_v
-                    yield new_key, new_val
+                    yield new_key, new_v
         return dict(_kernel(document))
 
 
