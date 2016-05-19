@@ -199,8 +199,7 @@ class DefaultDocumentFormatter(DocumentFormatter):
     def transform_element(self, key, value):
         try:
             new_value = self.transform_value(value)
-            new_key = DataType.forValue(value).prefix() + key
-            yield new_key, new_value
+            yield key, new_value
         except ValueError as e:
             LOG.warn("Invalid value for key: %s as %s"
                      % (key, str(e)))
@@ -210,7 +209,8 @@ class DefaultDocumentFormatter(DocumentFormatter):
             for key in doc:
                 value = doc[key]
                 for new_k, new_v in self.transform_element(key, value):
-                    yield new_k, new_v
+                    new_key = DataType.forValue(new_v).prefix() + new_k
+                    yield new_key, new_v
         return dict(_kernel(document))
 
 
