@@ -204,13 +204,23 @@ class DefaultDocumentFormatter(DocumentFormatter):
             LOG.warn("Invalid value for key: %s as %s"
                      % (key, str(e)))
 
+    def parseDate(self, value):
+        from dateutil import parser
+        parsed = value
+        try:
+            parsed = parser.parse(value)
+        except:
+            pass
+        return parsed
+
     def format_document(self, document):
         def _kernel(doc):
             for key in doc:
                 value = doc[key]
                 for new_k, new_v in self.transform_element(key, value):
-                    new_key = DataType.forValue(new_v).prefix() + new_k
-                    yield new_key, new_v
+                    new_val = self.parseDate(new_v)
+                    new_key = DataType.forValue(new_val).prefix() + new_k
+                    yield new_key, new_val
         return dict(_kernel(document))
 
 
