@@ -221,7 +221,7 @@ class DocManager(DocManagerBase):
         index, doc_type = self._index_and_mapping(namespace)
         # No need to duplicate '_id' in source document
         self.mapGeoFields(doc)
-        doc_id = u(doc.get("_id"))
+        doc_id = u(doc.pop("_id"))
 
         try:
             # Index the source document, using lowercase namespace as index name.
@@ -292,7 +292,7 @@ class DocManager(DocManagerBase):
             doc = None
             for doc in docs:
                 self.mapGeoFields(doc)
-                doc_id = u(doc.get("_id"))
+                doc_id = u(doc.pop("_id"))
                 document_action = {
                     "_index": index_name,
                     "_type": doc_type,
@@ -337,7 +337,7 @@ class DocManager(DocManagerBase):
     def insert_file(self, f, namespace, timestamp):
         doc = f.get_metadata()
         self.mapGeoFields(doc)
-        doc_id = str(doc.get('_id'))
+        doc_id = str(doc.pop('_id'))
         index, doc_type = self._index_and_mapping(namespace)
 
         # make sure that elasticsearch treats it like a file
