@@ -157,7 +157,7 @@ class DefaultDocumentFormatter(DocumentFormatter):
         # This is largely taken from bson.json_util.default, though not the same
         # so we don't modify the structure of the document
         if isinstance(value, dict):
-            return self.format_document(value)
+            return self.format_document(value, False)
         elif isinstance(value, list):
             return [self.transform_value(v) for v in value]
         if isinstance(value, RE_TYPES):
@@ -204,22 +204,17 @@ class DefaultDocumentFormatter(DocumentFormatter):
             LOG.warn("Invalid value for key: %s as %s"
                      % (key, str(e)))
 
-    def parseDate(self, value):
-        from dateutil import parser
-        parsed = value
-        try:
-            parsed = parser.parse(value)
-        except:
-            pass
-        return parsed
-
-    def format_document(self, document):
+    def format_document(self, document, first_call=True):
         def _kernel(doc):
             for key in doc:
                 value = doc[key]
                 for new_k, new_v in self.transform_element(key, value):
-                    new_val = self.parseDate(new_v)
-                    new_key = DataType.forValue(new_val).prefix() + new_k
+                    if first_call:
+                        new_val = self.parseDate(new_v)
+                        new_key = DataType.forValue(new_val).prefix() + new_k
+                    else:
+                        new_key = new_k
+                        new_val = new_v
                     yield new_key, new_val
         return dict(_kernel(document))
 
