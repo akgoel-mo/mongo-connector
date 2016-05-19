@@ -800,8 +800,7 @@ def get_config_options():
                 'targetURL': cli_values['target_url'],
                 'uniqueKey': cli_values['unique_key'],
                 'autoCommitInterval': cli_values['auto_commit_interval'],
-                'bulkSize': bulk_size,
-                'indexCategory': cli_values['index_category']
+                'bulkSize': bulk_size
             }]
 
         if not option.value:
@@ -826,8 +825,6 @@ def get_config_options():
                 dm['args'] = {}
             if not dm.get('bulkSize'):
                 dm['bulkSize'] = constants.DEFAULT_MAX_BULK
-            if not dm.get('indexCategory'):
-                dm['indexCategory'] = constants.DEFAULT_INDEX_CATEGORY
             aci = dm['autoCommitInterval']
             if aci is not None and aci < 0:
                 raise errors.InvalidConfiguration(
@@ -858,8 +855,7 @@ def get_config_options():
             kwargs = {
                 'unique_key': dm['uniqueKey'],
                 'auto_commit_interval': dm['autoCommitInterval'],
-                'chunk_size': dm['bulkSize'],
-                'index_category': dm['indexCategory']
+                'chunk_size': dm['bulkSize']
             }
             for k in dm['args']:
                 if k not in kwargs:
@@ -940,11 +936,6 @@ def get_config_options():
         " their own mechanism for adjusting a commit"
         " interval, which should be preferred to this"
         " option.")
-
-    doc_managers.add_cli(
-        "--index-category", dest="index_category", help=
-        "Categorize the new indexes to be created by the doc manager,"
-        " define their configuration (shard count/replica count etc)")
 
     continue_on_error = add_option(
         config_key="continueOnError",
