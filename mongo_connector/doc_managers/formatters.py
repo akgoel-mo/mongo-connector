@@ -108,7 +108,7 @@ class DataType(Enum):
                     float: DataType.DOUBLE,
                     str: DataType.STRING,
                     unicode: DataType.STRING,
-                    datetime: DataType.DATETIME
+                    datetime.datetime: DataType.DATETIME
                 }[type(value)]
         except:
             return DataType.UNKNOWN
@@ -210,8 +210,7 @@ class DefaultDocumentFormatter(DocumentFormatter):
                 value = doc[key]
                 for new_k, new_v in self.transform_element(key, value):
                     if first_call:
-                        new_val = self.parseDate(new_v)
-                        new_key = DataType.forValue(new_val).prefix() + new_k
+                        new_key = DataType.forValue(new_v).prefix() + new_k
                     else:
                         new_key = new_k
                         new_val = new_v
