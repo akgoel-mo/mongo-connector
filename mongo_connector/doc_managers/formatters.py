@@ -210,7 +210,9 @@ class DefaultDocumentFormatter(DocumentFormatter):
                 value = doc[key]
                 for new_k, new_v in self.transform_element(key, value):
                     if first_call:
-                        new_key = DataType.forValue(new_v).prefix() + new_k
+                        prefix = DataType.forValue(new_v).prefix()
+                        if not new_k.startswith(prefix):
+                            new_key = prefix + new_k
                     else:
                         new_key = new_k
                     yield new_key, new_v
