@@ -32,8 +32,7 @@ from mongo_connector import errors
 from threading import Lock
 from mongo_connector.compat import u
 from mongo_connector.constants import (DEFAULT_COMMIT_INTERVAL,
-                                       DEFAULT_MAX_BULK, DEFAULT_CATEGORIZER,
-                                       DEFAULT_INDEX_CATEGORY, DEFAULT_INDEX_NAME_PREFIX)
+                                       DEFAULT_MAX_BULK)
 from mongo_connector.util import exception_wrapper, retry_until_ok
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
@@ -61,15 +60,12 @@ class DocManager(DocManagerBase):
 
     def __init__(self, url, auto_commit_interval=DEFAULT_COMMIT_INTERVAL,
                  unique_key='_id', chunk_size=DEFAULT_MAX_BULK,
-                 attachment_field="content", categorizer=DEFAULT_CATEGORIZER,
-                 index_category=DEFAULT_INDEX_CATEGORY, **kwargs):
+                 attachment_field="content", **kwargs):
         es_nodes = [node.strip(' ') for node in url.split(',')]
         self.elastic = Elasticsearch(hosts=es_nodes, **kwargs.get('clientOptions', {}))
         self.auto_commit_interval = auto_commit_interval
         self.unique_key = unique_key
         self.chunk_size = chunk_size
-        self.categorizer = categorizer
-        self.index_category = index_category
         if self.auto_commit_interval not in [None, 0]:
             self.run_auto_commit()
         self._formatter = DefaultDocumentFormatter()
@@ -84,7 +80,7 @@ class DocManager(DocManagerBase):
     def _index_and_mapping(self, namespace):
         """Helper method for getting the index and type from a namespace."""
         index, doc_type = namespace.split('.', 1)
-        return DEFAULT_INDEX_NAME_PREFIX + index.lower(), doc_type
+        return index.lower(), doc_type
 
     def stop(self):
         """Stop the auto-commit thread."""
@@ -108,11 +104,10 @@ class DocManager(DocManagerBase):
             if not self.alias_added:
                 index_alias, doc_type_alias = self._index_and_mapping(namespace)
                 index, doc_type = self._index_and_mapping(mapped_ns)
-                alias_name = index_alias.replace(DEFAULT_INDEX_NAME_PREFIX, "", 1)
                 try:
-                    self.__remove_alias_and_index(alias_name)
-                    self.elastic.indices.put_alias(index=index, name=alias_name)
-                    LOG.info("Added alias %s for index %s" % (alias_name, index))
+                    self.__remove_alias_and_index(index_alias)
+                    self.elastic.indices.put_alias(index=index, name=index_alias)
+                    LOG.info("Added alias %s for index %s" % (index_alias, index))
                     self.alias_added = True
                 except Exception, e:
                     LOG.critical("Failed to add alias for index %s due to error %r" % (index, e))
@@ -139,10 +134,9 @@ class DocManager(DocManagerBase):
         with self.mutex:
             if not self.index_created:
                 index, doc_type = self._index_and_mapping(namespace)
-                request = {'settings': {'index': self.categorizer[self.index_category]}}
-                LOG.info("Creating index: %r with settings: %r" % (index, request))
+                LOG.info("Creating index: %r" % index)
                 try:
-                    self.elastic.indices.create(index=index, body=request)
+                    self.elastic.indices.create(index=index)
                     self.index_created = True
                 except RequestError, e:
                     LOG.warning('Failed to create index due to error: %r' % e)

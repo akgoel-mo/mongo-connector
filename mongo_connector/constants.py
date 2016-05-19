@@ -48,22 +48,3 @@ DEFAULT_LOG_FORMAT = (
 DEFAULT_META_COLLECTION_NAME = "__oplog"
 # If a single meta collection is used, defines the default cap size
 DEFAULT_META_COLLECTION_CAP_SIZE = 5 * 1024 * 1024
-
-DEFAULT_INDEX_CATEGORY = "medium"
-
-DEFAULT_INDEX_NAME_PREFIX = "mongo-connector-"
-
-DEFAULT_CATEGORIZER = {
-    "small": {
-        "number_of_shards": 1,
-        "number_of_replicas": 1
-    },
-    "medium": {
-        "number_of_shards": 2,
-        "number_of_replicas": 1
-    },
-    "large": {
-        "number_of_shards": 3,
-        "number_of_replicas": 1
-    }
-}
