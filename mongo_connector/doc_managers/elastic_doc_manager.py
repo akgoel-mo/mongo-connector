@@ -233,6 +233,7 @@ class DocManager(DocManagerBase):
             error = self.parseError(e.info['error'])
             if(error):
                 return (doc_id, error['field_name'])
+        doc['_id'] = doc_id
         return None
 
     def mapGeoFields(self, doc):
@@ -299,6 +300,7 @@ class DocManager(DocManagerBase):
                     "_id": doc_id,
                     "_source": self._formatter.format_document(doc)
                 }
+                doc['_id'] = doc_id
                 yield document_action
         responses = []
         doc_actions = docs_to_upsert()
@@ -358,6 +360,7 @@ class DocManager(DocManagerBase):
         self.elastic.index(index=index, doc_type=doc_type,
                            body=doc, id=doc_id,
                            refresh=(self.auto_commit_interval == 0))
+        doc['_id'] = doc_id
 
     @wrap_exceptions
     def remove(self, document_id, namespace, timestamp):
