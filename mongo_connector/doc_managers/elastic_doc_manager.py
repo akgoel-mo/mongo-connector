@@ -243,7 +243,8 @@ class DocManager(DocManagerBase):
         for key, val in doc.items():
             if key.startswith(date_prefix):
                 doc[key] = parser.parse(val)
-        return doc
+        doc_no_prefixes = {DataType.attributeNameFromKey(k): v for k, v in doc.items()}
+        return doc_no_prefixes
 
     def mapGeoFields(self, doc):
         for key in doc.keys():
