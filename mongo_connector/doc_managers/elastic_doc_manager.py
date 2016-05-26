@@ -234,7 +234,7 @@ class DocManager(DocManagerBase):
             LOG.info("Failed to upsert document: %r", e.info)
             error = self.parseError(e.info['error'])
             if(error):
-                return (doc_id, error['field_name'])
+                return (doc_id, DataType.attributeNameFromKey(error['field_name']))
         doc['_id'] = doc_id
         return None
 
@@ -280,7 +280,7 @@ class DocManager(DocManagerBase):
 
     def parseError(self, error):
         error_dict = self._errorToDict(error)
-        error_info = error_dict.get('error', {}).get('error', {})
+        error_info = error_dict.get('error', {})
         reason = error_info.get('reason', '')
         parsed = parse("failed to parse [{field_name}]{}", reason)
         if parsed and parsed.named:
@@ -334,8 +334,8 @@ class DocManager(DocManagerBase):
             for error in e.errors:
                 err = error['index']
                 try:
-                    error_field = self.parseError(err)
-                    yield (err['_id'], error_field['field_name'])
+                    error_field = self.parseError(err['error'])
+                    yield (err['_id'], DataType.attributeNameFromKey(error_field['field_name']))
                 except Exception, e:
                     LOG.error("Could not parse error field: %r due to error: %r" % (err['error'], e))
         except errors.EmptyDocsError:
