@@ -321,12 +321,23 @@ class DocManager(DocManagerBase):
                 kw['chunk_size'] = self.chunk_size
             responses = streaming_bulk(client=self.elastic,
                                        actions=doc_actions,
+                                       raise_on_error=False,
                                        **kw)
             docs_inserted = 0
             for ok, resp in responses:
-                docs_inserted += 1
-                if(docs_inserted % 10000 == 0):
-                    LOG.info("Bulk Upsert: Inserted %d docs" % docs_inserted)
+                if not ok and resp:
+                    try:
+                        index = resp['index']
+                        error_field = self.parseError(index['error'])
+                        error = (index['_id'], DataType.attributeNameFromKey(error_field['field_name']))
+                        LOG.info("Found failed document from bulk upsert: %s", error)
+                        yield error
+                    except Exception:
+                        LOG.error("Could not parse response to reinsert: %r" % resp)
+                else:
+                    docs_inserted += 1
+                    if(docs_inserted % 10000 == 0):
+                        LOG.info("Bulk Upsert: Inserted %d docs" % docs_inserted)
             LOG.info("Bulk Upsert: Finished inserting %d docs" % docs_inserted)
             self.commit(index_name)
         except BulkIndexError, e:
