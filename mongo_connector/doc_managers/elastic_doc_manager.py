@@ -275,7 +275,7 @@ class DocManager(DocManagerBase):
                 error_dict['type'] = error.error
             error_dict['status'] = error.status_code
         elif isinstance(error, dict):
-            error_dict.update(error)
+            error_dict['error'] = error
         return error_dict
 
     def parseError(self, error):
@@ -334,7 +334,7 @@ class DocManager(DocManagerBase):
             for error in e.errors:
                 err = error['index']
                 try:
-                    error_field = self.parseError(err['error'])
+                    error_field = self.parseError(err)
                     yield (err['_id'], error_field['field_name'])
                 except Exception, e:
                     LOG.error("Could not parse error field: %r due to error: %r" % (err['error'], e))
