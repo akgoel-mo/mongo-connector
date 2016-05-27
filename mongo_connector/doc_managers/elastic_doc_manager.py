@@ -290,6 +290,10 @@ class DocManager(DocManagerBase):
             parsed = parse("{} for {field_name}", reason)
             if parsed and parsed.named:
                 return parsed.named
+            else:
+                parsed = parse("{}field=\"{field_name}\"{}", reason)
+                if parsed and parsed.named:
+                    return parsed.named
         LOG.warning("Couldn't parse ES error: %s", error_info)
         return None
 
